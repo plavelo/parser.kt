@@ -38,15 +38,15 @@ sealed class Value {
     }
 }
 
-sealed class Reply {
-    abstract fun position(): Int
-    abstract fun raw(): Value
-    abstract fun value(): Any
-    abstract fun farthest(): Int
-    abstract fun expected(): Collection<String>
+interface Reply {
+    fun position(): Int
+    fun raw(): Value
+    fun value(): Any
+    fun farthest(): Int
+    fun expected(): Collection<String>
 }
 
-class Success(private val position: Int, private val value: Value) : Reply() {
+class Success(private val position: Int, private val value: Value) : Reply {
     override fun position(): Int = position
     override fun raw(): Value = value
     override fun value(): Any = when (value) {
@@ -54,12 +54,11 @@ class Success(private val position: Int, private val value: Value) : Reply() {
         is Value.Multiple -> value.value()
         is Value.Empty -> value
     }
-
     override fun farthest(): Int = -1
     override fun expected(): Collection<String> = emptyList()
 }
 
-class Failure(private val position: Int, private val expected: Collection<String>) : Reply() {
+class Failure(private val position: Int, private val expected: Collection<String>) : Reply {
     override fun position(): Int = position
     override fun raw(): Value = throw RuntimeException()
     override fun value(): Any = throw RuntimeException()
