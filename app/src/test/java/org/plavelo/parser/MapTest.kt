@@ -3,12 +3,15 @@ package org.plavelo.parser
 import org.junit.Assert
 import org.junit.Test
 
-class ThenTest {
+class MapTest {
     @Test
     @Throws(Exception::class)
-    fun then() {
-        val parser = Parser.string("x").then(Parser.string("y"))
-        val result1 = parser.parse("xy")
+    fun map() {
+        val parser = Parser.string("x").map {
+            Assert.assertEquals("x", it.value())
+            Value.Single("y")
+        }
+        val result1 = parser.parse("x")
         Assert.assertTrue(result1.isRight())
         Assert.assertEquals("y", result1.reply().value())
     }

@@ -8,9 +8,9 @@ class EofTest {
     @Throws(Exception::class)
     fun eof() {
         val parser = Parser.regex("\\s*")
-                .skip(Parser.EOF)
+                .skip(Parser.eof)
                 .or(Parser.all.result("default"))
-        Assert.assertEquals("  ", parser.parse("  ").result().value())
-        Assert.assertEquals("default", parser.parse("x").result().value())
+        Assert.assertEquals("  ", parser.parse("  ").reply().value())
+        Assert.assertEquals("default", parser.parse("x").reply().value())
     }
 }
