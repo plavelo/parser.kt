@@ -241,7 +241,8 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
             val pairs = separator.then(parser).many()
             return parser.chain(fun(r): Parser {
                 return pairs.map(fun(rs): Value {
-                    return Value.Multiple(listOf(r.wrapped()) + rs.wrapped())
+                    val value = ((r as? Value.Single)?.wrapped() ?: listOf(r.wrapped())) + rs.wrapped()
+                    return Value.Multiple(value)
                 })
             })
         }
