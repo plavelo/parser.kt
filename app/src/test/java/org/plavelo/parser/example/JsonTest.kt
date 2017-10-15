@@ -17,7 +17,7 @@ class JsonTest {
 
             val elements: Parser = Parser.lazy(lazy {
                 Parser.alt(
-                        obj,
+                        map,
                         array,
                         stringValue,
                         numberValue,
@@ -39,13 +39,10 @@ class JsonTest {
 
             val array = leftBracket.then(elements.sepBy(comma)).skip(rightBracket)
             val pair = Parser.seq(stringValue.skip(colon), elements)
-            val obj = leftBrace.then(pair.sepBy(comma)).skip(rightBrace).map {
-                val result = mutableMapOf<String, Any?>()
-                (it.content() as List<*>).map {
+            val map = leftBrace.then(pair.sepBy(comma)).skip(rightBrace).map {
+                val result = (it.content() as List<*>).map {
                     it as List<*>
-                }.forEach {
-                    result[it[0] as String] = it[1]
-                }
+                }.associateBy({ it[0] as String }, { it[1] as Any })
                 Value.Single(result)
             }
         }
@@ -64,7 +61,7 @@ class JsonTest {
             |  ]
             |}""".trimMargin()
 
-        val result = Language().obj.parse(source).right().content() as Map<*, *>
+        val result = Language().elements.parse(source).right().content() as Map<*, *>
 
         Assert.assertEquals("foobar", result["string"])
         Assert.assertEquals(-12345, result["number"])

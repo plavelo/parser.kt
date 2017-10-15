@@ -21,10 +21,10 @@ sealed class Either<out L, out R> {
 
 sealed class Value {
     abstract fun content(): Any
-    abstract fun wrapped(): Collection<Any>
+    abstract fun wrapped(): List<Any>
     class Empty : Value() {
         override fun content() = emptyList<Any>()
-        override fun wrapped(): Collection<Any> = emptyList()
+        override fun wrapped() = emptyList<Any>()
     }
 
     class Single(private val value: Any) : Value() {
@@ -32,7 +32,7 @@ sealed class Value {
         override fun wrapped() = listOf(value)
     }
 
-    class Multiple(private val value: Collection<Any>) : Value() {
+    class Multiple(private val value: List<Any>) : Value() {
         override fun content() = value
         override fun wrapped() = value
     }
@@ -81,11 +81,11 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
     fun parse(source: String): Either<Failure, Success> = skip(eof)(source, 0)
 
     fun skip(next: Parser): Parser = seq(this, next).map {
-        if (it is Value.Multiple) Value.Single(it.content().toList()[0]) else throw RuntimeException()
+        Value.Single((it as Value.Multiple).content().first())
     }
 
     fun then(next: Parser): Parser = seq(this, next).map {
-        if (it is Value.Multiple) Value.Single(it.content().toList()[1]) else throw RuntimeException()
+        Value.Single((it as Value.Multiple).content().last())
     }
 
     fun thru(wrapper: (Parser) -> Parser): Parser = wrapper(this)
@@ -147,7 +147,7 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
         }
 
         val all: Parser = Parser { source, position ->
-            Either.Right(Success(source.length, Value.Multiple(listOf(source.slice(position until source.length)))))
+            Either.Right(Success(source.length, Value.Single(source.slice(position until source.length))))
         }
 
         fun regex(pattern: String, option: RegexOption? = null, group: Int = 0): Parser {
@@ -207,9 +207,6 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
         }
 
         fun alt(vararg parsers: Parser): Parser {
-            if (parsers.isEmpty()) {
-                return fail(listOf("zero alternates"))
-            }
             return Parser(fun(source, position): Either<Failure, Success> {
                 var reply: Either<Failure, Success>? = null
                 for (parser in parsers) {
@@ -226,12 +223,12 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
 
         fun sepBy1(parser: Parser, separator: Parser): Parser {
             val pairs = separator.then(parser).many()
-            return parser.chain(fun(r): Parser {
-                return pairs.map(fun(rs): Value {
-                    val value = ((r as? Value.Single)?.wrapped() ?: listOf(r.wrapped())) + rs.wrapped()
-                    return Value.Multiple(value)
-                })
-            })
+            return parser.chain { reply ->
+                pairs.map { sepReply ->
+                    val value = listOf(reply.content()) + sepReply.wrapped()
+                    Value.Multiple(value)
+                }
+            }
         }
 
         fun fail(expected: Collection<String>): Parser = Parser { _, position ->
