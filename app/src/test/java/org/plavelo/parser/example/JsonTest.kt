@@ -34,19 +34,17 @@ class JsonTest {
 
             val trueValue = word("true").result(true)
             val falseValue = word("false").result(false)
-            val stringValue = token(Parser.regex("\"((?:\\\\.|.)*?)\"", group = 1))
+            val stringValue = token(Parser.regex("\"(.*?)\"", group = 1))
             val numberValue = token(Parser.regex("-?(0|[1-9][0-9]*)").map { Value.Single((it.content() as String).toInt()) })
 
             val array = leftBracket.then(elements.sepBy(comma)).skip(rightBracket)
             val pair = Parser.seq(stringValue.skip(colon), elements)
             val obj = leftBrace.then(pair.sepBy(comma)).skip(rightBrace).map {
                 val result = mutableMapOf<String, Any?>()
-                if (it.content() !is Value.Empty) {
-                    (it.content() as List<*>).map {
-                        it as List<*>
-                    }.forEach {
-                        result[it[0] as String] = it[1]
-                    }
+                (it.content() as List<*>).map {
+                    it as List<*>
+                }.forEach {
+                    result[it[0] as String] = it[1]
                 }
                 Value.Single(result)
             }

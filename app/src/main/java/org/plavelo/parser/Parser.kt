@@ -47,11 +47,7 @@ class Success(private val position: Int, private val value: Value) : Reply {
     override fun position(): Int = position
     override fun errorPosition(): Int = -1
     fun value(): Value = value
-    fun content(): Any = when (value) {
-        is Value.Single -> value.content()
-        is Value.Multiple -> value.content()
-        is Value.Empty -> value
-    }
+    fun content(): Any = value.content()
 }
 
 class Failure(private val position: Int, private val expected: Collection<String>) : Reply {
@@ -107,10 +103,10 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
                 if (reply.isRight()) {
                     accumulator.add(reply.right().content())
                     pos = reply.right().position()
+                    reply = mergeReplies(this(source, pos), reply)
                 } else {
                     return mergeReplies(Either.Right(Success(pos, Value.Multiple(accumulator))), reply)
                 }
-                reply = mergeReplies(this(source, pos), reply)
             }
         })
     }
@@ -126,16 +122,19 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
         })
     }
 
-    fun result(result: Any): Parser = map { Value.Single(result) }
+    fun result(result: Any): Parser = map {
+        Value.Single(result)
+    }
 
     fun map(function: (Value) -> Value): Parser {
-        return Parser(fun(source, position): Either<Failure, Success> {
+        return Parser { source, position ->
             val reply = this(source, position)
             if (reply.isLeft()) {
-                return reply
+                reply
+            } else {
+                mergeReplies(Either.Right(Success(reply.right().position(), function(reply.right().value()))), reply)
             }
-            return mergeReplies(Either.Right(Success(reply.right().position(), function(reply.right().value()))), reply)
-        })
+        }
     }
 
     companion object {
@@ -152,17 +151,16 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
         }
 
         fun regex(pattern: String, option: RegexOption? = null, group: Int = 0): Parser {
-            val anchoredPattern = "^(?:$pattern)"
-            val anchored = if (option == null) Regex(anchoredPattern) else Regex(anchoredPattern, option)
-            return Parser(fun(source: String, position: Int): Either<Failure, Success> {
-                val match = anchored.find(source.slice(position until source.length))
+            val anchoredPattern = "^$pattern"
+            val regex = if (option == null) Regex(anchoredPattern) else Regex(anchoredPattern, option)
+            return Parser { source, position ->
+                val match = regex.find(source.slice(position until source.length))
                 if (match != null && group in 0..match.groupValues.size) {
-                    val fullMatch = match.value
-                    val groupMatch = match.groupValues[group]
-                    return Either.Right(Success(position + fullMatch.length, Value.Single(groupMatch)))
+                    Either.Right(Success(position + match.value.length, Value.Single(match.groupValues[group])))
+                } else {
+                    Either.Left(Failure(position, listOf(pattern)))
                 }
-                return Either.Left(Failure(position, listOf(pattern)))
-            })
+            }
         }
 
         fun string(string: String): Parser {
@@ -201,8 +199,8 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
                     if (reply.isLeft()) {
                         return reply
                     }
-                    accumulator.add(reply.right().content())
                     pos = reply.right().position()
+                    accumulator.add(reply.right().content())
                 }
                 return mergeReplies(Either.Right(Success(pos, Value.Multiple(accumulator))), reply)
             })
@@ -236,8 +234,12 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
             })
         }
 
-        fun fail(expected: Collection<String>): Parser = Parser { _, position -> Either.Left(Failure(position, expected)) }
+        fun fail(expected: Collection<String>): Parser = Parser { _, position ->
+            Either.Left(Failure(position, expected))
+        }
 
-        fun succeed(value: Value): Parser = Parser { _, position -> Either.Right(Success(position, value)) }
+        fun succeed(value: Value): Parser = Parser { _, position ->
+            Either.Right(Success(position, value))
+        }
     }
 }
