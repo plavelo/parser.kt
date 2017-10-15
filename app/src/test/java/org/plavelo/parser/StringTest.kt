@@ -11,6 +11,6 @@ class StringTest {
         val parser = Parser.string("a")
         val result1 = parser.parse("a")
         assertTrue(result1.isRight())
-        assertEquals("a", result1.reply().value())
+        assertEquals("a", result1.right().content())
     }
 }

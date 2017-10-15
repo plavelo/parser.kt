@@ -20,70 +20,62 @@ sealed class Either<out L, out R> {
 }
 
 sealed class Value {
-    abstract fun value(): Any
+    abstract fun content(): Any
     abstract fun wrapped(): Collection<Any>
     class Empty : Value() {
-        override fun value() = emptyList<Any>()
+        override fun content() = emptyList<Any>()
         override fun wrapped(): Collection<Any> = emptyList()
     }
 
     class Single(private val value: Any) : Value() {
-        override fun value() = value
+        override fun content() = value
         override fun wrapped() = listOf(value)
     }
 
     class Multiple(private val value: Collection<Any>) : Value() {
-        override fun value() = value
+        override fun content() = value
         override fun wrapped() = value
     }
 }
 
 interface Reply {
     fun position(): Int
-    fun raw(): Value
-    fun value(): Any
-    fun farthest(): Int
-    fun expected(): Collection<String>
+    fun errorPosition(): Int
 }
 
 class Success(private val position: Int, private val value: Value) : Reply {
     override fun position(): Int = position
-    override fun raw(): Value = value
-    override fun value(): Any = when (value) {
-        is Value.Single -> value.value()
-        is Value.Multiple -> value.value()
+    override fun errorPosition(): Int = -1
+    fun value(): Value = value
+    fun content(): Any = when (value) {
+        is Value.Single -> value.content()
+        is Value.Multiple -> value.content()
         is Value.Empty -> value
     }
-    override fun farthest(): Int = -1
-    override fun expected(): Collection<String> = emptyList()
 }
 
 class Failure(private val position: Int, private val expected: Collection<String>) : Reply {
     override fun position(): Int = position
-    override fun raw(): Value = throw RuntimeException()
-    override fun value(): Any = throw RuntimeException()
-    override fun farthest(): Int = position
-    override fun expected(): Collection<String> = expected
+    override fun errorPosition(): Int = position
+    fun expected(): Collection<String> = expected
 }
 
 fun Either<Failure, Success>.reply(): Reply = if (this.isRight()) this.right() else this.left()
 
-private fun mergeReplies(reply: Either<Failure, Success>, last: Either<Failure, Success>?): Either<Failure, Success> {
-    if (last == null) {
-        return reply
+private fun mergeReplies(either: Either<Failure, Success>, lastEither: Either<Failure, Success>?): Either<Failure, Success> {
+    if (lastEither == null) {
+        return either
     }
-    if (reply.reply().farthest() > last.reply().farthest()) {
-        return reply
+    if (either.isRight()) {
+        return Either.Right(Success(either.right().position(), either.right().value()))
     }
-    if (reply.isRight()) {
-        return Either.Right(Success(reply.reply().position(), reply.reply().raw()))
+    if (either.reply().errorPosition() == lastEither.reply().errorPosition()) {
+        return Either.Left(Failure(either.left().errorPosition(), either.left().expected().union(lastEither.left().expected())))
     }
-    val expected = if (reply.reply().farthest() == last.reply().farthest()) {
-        reply.reply().expected().union(last.reply().expected())
-    } else {
-        last.reply().expected()
+    if (either.reply().errorPosition() > lastEither.reply().errorPosition()) {
+        return either
     }
-    return Either.Left(Failure(last.reply().position(), expected))
+    return lastEither
 }
 
 class Parser(private var action: (source: String, position: Int) -> Either<Failure, Success>) {
@@ -93,11 +85,11 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
     fun parse(source: String): Either<Failure, Success> = skip(eof)(source, 0)
 
     fun skip(next: Parser): Parser = seq(this, next).map {
-        if (it is Value.Multiple) Value.Single(it.value().toList()[0]) else throw RuntimeException()
+        if (it is Value.Multiple) Value.Single(it.content().toList()[0]) else throw RuntimeException()
     }
 
     fun then(next: Parser): Parser = seq(this, next).map {
-        if (it is Value.Multiple) Value.Single(it.value().toList()[1]) else throw RuntimeException()
+        if (it is Value.Multiple) Value.Single(it.content().toList()[1]) else throw RuntimeException()
     }
 
     fun thru(wrapper: (Parser) -> Parser): Parser = wrapper(this)
@@ -106,21 +98,19 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
 
     fun sepBy(separator: Parser): Parser = sepBy(this, separator)
 
-    fun sepBy1(separator: Parser): Parser = sepBy1(this, separator)
-
     fun many(): Parser {
         return Parser(fun(source, position): Either<Failure, Success> {
-            var reply: Either<Failure, Success>? = null
             val accumulator = mutableListOf<Any>()
             var pos = position
+            var reply: Either<Failure, Success> = this(source, pos)
             while (true) {
-                reply = mergeReplies(this(source, pos), reply)
                 if (reply.isRight()) {
-                    accumulator.add(reply.reply().value())
-                    pos = reply.reply().position()
+                    accumulator.add(reply.right().content())
+                    pos = reply.right().position()
                 } else {
                     return mergeReplies(Either.Right(Success(pos, Value.Multiple(accumulator))), reply)
                 }
+                reply = mergeReplies(this(source, pos), reply)
             }
         })
     }
@@ -131,8 +121,8 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
             if (reply.isLeft()) {
                 return reply
             }
-            val nextParser = function(reply.reply().raw())
-            return mergeReplies(nextParser(source, reply.reply().position()), reply)
+            val nextParser = function(reply.right().value())
+            return mergeReplies(nextParser(source, reply.right().position()), reply)
         })
     }
 
@@ -144,7 +134,7 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
             if (reply.isLeft()) {
                 return reply
             }
-            return mergeReplies(Either.Right(Success(reply.reply().position(), function(reply.reply().raw()))), reply)
+            return mergeReplies(Either.Right(Success(reply.right().position(), function(reply.right().value()))), reply)
         })
     }
 
@@ -211,8 +201,8 @@ class Parser(private var action: (source: String, position: Int) -> Either<Failu
                     if (reply.isLeft()) {
                         return reply
                     }
-                    accumulator.add(reply.reply().value())
-                    pos = reply.reply().position()
+                    accumulator.add(reply.right().content())
+                    pos = reply.right().position()
                 }
                 return mergeReplies(Either.Right(Success(pos, Value.Multiple(accumulator))), reply)
             })

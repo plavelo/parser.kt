@@ -13,7 +13,7 @@ class AltTest {
         )
         val result1 = parser.parse("ab")
         Assert.assertTrue(result1.isRight())
-        Assert.assertEquals("ab", result1.reply().value())
+        Assert.assertEquals("ab", result1.right().content())
     }
 }
 

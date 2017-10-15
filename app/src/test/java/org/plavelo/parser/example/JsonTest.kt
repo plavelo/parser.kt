@@ -4,7 +4,6 @@ import junit.framework.Assert
 import org.junit.Test
 import org.plavelo.parser.Parser
 import org.plavelo.parser.Value
-import org.plavelo.parser.reply
 
 class JsonTest {
     @Test
@@ -36,14 +35,14 @@ class JsonTest {
             val trueValue = word("true").result(true)
             val falseValue = word("false").result(false)
             val stringValue = token(Parser.regex("\"((?:\\\\.|.)*?)\"", group = 1))
-            val numberValue = token(Parser.regex("-?(0|[1-9][0-9]*)").map { Value.Single((it.value() as String).toInt()) })
+            val numberValue = token(Parser.regex("-?(0|[1-9][0-9]*)").map { Value.Single((it.content() as String).toInt()) })
 
             val array = leftBracket.then(elements.sepBy(comma)).skip(rightBracket)
             val pair = Parser.seq(stringValue.skip(colon), elements)
             val obj = leftBrace.then(pair.sepBy(comma)).skip(rightBrace).map {
                 val result = mutableMapOf<String, Any?>()
-                if (it.value() !is Value.Empty) {
-                    (it.value() as List<*>).map {
+                if (it.content() !is Value.Empty) {
+                    (it.content() as List<*>).map {
                         it as List<*>
                     }.forEach {
                         result[it[0] as String] = it[1]
@@ -67,7 +66,7 @@ class JsonTest {
             |  ]
             |}""".trimMargin()
 
-        val result = Language().obj.parse(source).reply().value() as Map<*, *>
+        val result = Language().obj.parse(source).right().content() as Map<*, *>
 
         Assert.assertEquals("foobar", result["string"])
         Assert.assertEquals(-12345, result["number"])

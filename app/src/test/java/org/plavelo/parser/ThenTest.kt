@@ -10,6 +10,6 @@ class ThenTest {
         val parser = Parser.string("x").then(Parser.string("y"))
         val result1 = parser.parse("xy")
         Assert.assertTrue(result1.isRight())
-        Assert.assertEquals("y", result1.reply().value())
+        Assert.assertEquals("y", result1.right().content())
     }
 }

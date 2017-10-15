@@ -10,7 +10,7 @@ class EofTest {
         val parser = Parser.regex("\\s*")
                 .skip(Parser.eof)
                 .or(Parser.all.result("default"))
-        Assert.assertEquals("  ", parser.parse("  ").reply().value())
-        Assert.assertEquals("default", parser.parse("x").reply().value())
+        Assert.assertEquals("  ", parser.parse("  ").right().content())
+        Assert.assertEquals("default", parser.parse("x").right().content())
     }
 }
